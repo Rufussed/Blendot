@@ -62,6 +62,10 @@ the hash last recorded in `<blend>.json`:
      origins; matched by a `blendot_id` custom property (glTF extras) so renames
      and reparenting update the same node, keeping Godot-added scripts/children.
    - Godot materials are kept by material name.
+   - Project > Tools > "Blendot: Clean Up Unused Blender Files..." lists sidecars
+     and meshes no saved or open scene uses, and moves them to the system trash.
+   - Editing something already open in Blender raises that window (Hyprland)
+     or says so, instead of starting a second Blender on the same .blend.
 3. Settings panel; convert mode with UID carry-over.
 
 ### FBX round-trip findings (tested on Blender, Maya/Arnold and Mixamo FBX)

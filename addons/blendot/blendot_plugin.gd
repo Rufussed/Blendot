@@ -5,10 +5,13 @@ const FileMenu := preload("res://addons/blendot/file_context_menu.gd")
 const SceneMenu := preload("res://addons/blendot/scene_context_menu.gd")
 const Launcher := preload("res://addons/blendot/launcher.gd")
 const MeshNodeEditor := preload("res://addons/blendot/mesh_node_editor.gd")
+const Cleanup := preload("res://addons/blendot/cleanup.gd")
+const CLEANUP_MENU := "Blendot: Clean Up Unused Blender Files..."
 
 var _file_menu: EditorContextMenuPlugin
 var _scene_menu: EditorContextMenuPlugin
 var _launcher: Launcher
+var _cleanup: Cleanup
 
 
 func _enter_tree() -> void:
@@ -20,9 +23,12 @@ func _enter_tree() -> void:
 	add_context_menu_plugin(EditorContextMenuPlugin.CONTEXT_SLOT_FILESYSTEM, _file_menu)
 	_scene_menu = SceneMenu.new(MeshNodeEditor.new(_launcher))
 	add_context_menu_plugin(EditorContextMenuPlugin.CONTEXT_SLOT_SCENE_TREE, _scene_menu)
+	_cleanup = Cleanup.new(_launcher)
+	add_tool_menu_item(CLEANUP_MENU, _cleanup.run)
 
 
 func _exit_tree() -> void:
 	remove_context_menu_plugin(_file_menu)
 	remove_context_menu_plugin(_scene_menu)
+	remove_tool_menu_item(CLEANUP_MENU)
 	_launcher.queue_free()

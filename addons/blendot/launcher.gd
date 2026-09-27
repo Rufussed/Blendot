@@ -14,6 +14,8 @@ const BRIDGE := "res://addons/blendot/blender/blendot_bridge.py"
 
 ## abs path -> {"mtime": int, "on_change": Callable}, for files Blender writes.
 var _watched := {}
+## blend abs path -> pid of the Blender this editor session launched for it.
+var _running := {}
 var _timer: Timer
 
 
@@ -60,6 +62,9 @@ func edit_file(res_path: String) -> void:
 	var blend := sidecar_blend_path(res_path)
 	var asset_abs := ProjectSettings.globalize_path(res_path)
 	var blend_abs := ProjectSettings.globalize_path(blend)
+	if is_open(blend_abs):
+		_focus_existing(blend_abs)
+		return
 
 	if not FileAccess.file_exists(blend):
 		launch(asset_abs, blend_abs, false)
@@ -129,6 +134,11 @@ func _ask_stale(res_path: String, asset_abs: String, blend_abs: String) -> void:
 
 func launch(asset_abs: String, blend_abs: String, rebuild: bool,
 		on_change: Callable = _rescan, mode := "file") -> void:
+	# A second Blender on the same .blend would overwrite the first one's saves.
+	if is_open(blend_abs):
+		watch(asset_abs, on_change)
+		_focus_existing(blend_abs)
+		return
 	DirAccess.make_dir_recursive_absolute(blend_abs.get_base_dir())
 	_ensure_gdignore()
 	if rebuild and FileAccess.file_exists(blend_abs):
@@ -144,7 +154,31 @@ func launch(asset_abs: String, blend_abs: String, rebuild: bool,
 			% [_blender_path(), SETTING_BLENDER])
 		return
 	print("Blendot: editing %s in Blender (sidecar %s)" % [asset_abs, blend_abs])
+	_running[blend_abs] = pid
 	watch(asset_abs, on_change)
+
+
+func is_open(blend_abs: String) -> bool:
+	var pid: int = _running.get(blend_abs, 0)
+	if pid > 0 and OS.is_process_running(pid):
+		return true
+	_running.erase(blend_abs)
+	return false
+
+
+## True if any Blender this plugin launched still has a Blendot file open.
+func open_blend_files() -> Array:
+	return _running.keys().filter(is_open)
+
+
+func _focus_existing(blend_abs: String) -> void:
+	var pid: int = _running[blend_abs]
+	# Hyprland can raise a window by pid; elsewhere, just tell the user.
+	if OS.has_environment("HYPRLAND_INSTANCE_SIGNATURE"):
+		OS.execute("hyprctl", ["dispatch", "focuswindow", "pid:%d" % pid])
+	EditorInterface.get_editor_toaster().push_toast(
+		"Blendot: %s is already open in Blender." % blend_abs.get_file().trim_suffix(".blend"),
+		EditorToaster.SEVERITY_INFO)
 
 
 ## Calls on_change(path) whenever the file at path is rewritten.
