@@ -22,14 +22,14 @@ Targets: Godot 4.4+ (developed on 4.7), Blender 4.2+ (developed on 5.2).
 
 ## Blender side: `blendot_bridge.py`
 
-One file used two ways:
-- passed via `blender --python blendot_bridge.py -- <args>` on launch (no install needed);
-- installable as a Blender addon so `.blend` files opened directly still export.
+Passed by Godot at launch: `blender --python blendot_bridge.py -- --target <asset> --blend <file.blend>`.
+It opens (or creates from the asset) the sidecar `.blend`, and for that Blender
+session only, each save of that exact `.blend` exports to the asset and writes
+`<blend>.json` with the asset's SHA-256.
 
-Each Blendot `.blend` stores in scene custom properties:
-`blendot_target` (relative to the .blend), `blendot_format`, `blendot_enabled`.
-A persistent `save_post` handler exports to the target when those exist.
-After export it writes `<blend>.json` with the target's SHA-256.
+Deliberately **not** an installed addon, and nothing is stored in the `.blend`:
+opened directly in Blender it's a plain file, and "Save As" elsewhere never
+exports. Exporting only happens when the edit was started from Godot.
 
 ## Stale-source detection (teams)
 
@@ -54,8 +54,7 @@ the hash last recorded in `<blend>.json`:
 ## Milestones
 
 1. **FileSystem right-click, sidecar mode.** Create/open `.blend`, export on save,
-   stale-hash dialog, Godot rescans on focus. *(in progress)*
-2. Blender addon install button + N-panel (target, Export now, enable toggle).
-3. Scene-tree `MeshInstance3D` entry with mesh swap + undo.
-4. Settings panel; convert mode with UID carry-over.
-5. Advanced Import Settings button, export preset tuning, Asset Library release.
+   stale-hash dialog, Godot rescans on change. *(done)*
+2. Scene-tree `MeshInstance3D` entry with mesh swap + undo.
+3. Settings panel; convert mode with UID carry-over.
+4. Advanced Import Settings button, export preset tuning, Asset Library release.

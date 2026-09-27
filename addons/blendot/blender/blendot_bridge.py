@@ -1,10 +1,11 @@
-"""Blendot bridge: keeps a .blend as the editable source of a Godot asset and
-exports to that asset on every save.
+"""Blendot bridge, passed to Blender by Godot:
 
-Used two ways:
-  * launched by Godot: blender --python blendot_bridge.py -- --target <asset> --blend <file.blend>
-  * installed as a Blender addon, so Blendot .blend files export even when
-    opened directly in Blender.
+    blender --python blendot_bridge.py -- --target <asset> --blend <file.blend>
+
+Opens (or creates from the asset) the sidecar .blend. While this Blender session
+runs, every save of that exact .blend exports back to the asset. Nothing is
+stored in the .blend: opened any other way it's a plain file, and "Save As"
+elsewhere never exports.
 """
 
 import hashlib
@@ -15,20 +16,10 @@ import sys
 import bpy
 from bpy.app.handlers import persistent
 
-bl_info = {
-    "name": "Blendot",
-    "author": "Rufus Lane",
-    "version": (0, 1, 0),
-    "blender": (4, 2, 0),
-    "category": "Import-Export",
-    "description": "Export Blendot .blend files back to their Godot asset on save",
-}
+# The one .blend -> asset pair this Blender session exports for.
+_session = {"blend": None, "target": None}
 
-PROP_TARGET = "blendot_target"  # asset path, relative to the .blend
-PROP_FORMAT = "blendot_format"
-PROP_ENABLED = "blendot_enabled"
-
-# Saves that must not export (the initial save right after importing).
+# Set for the initial save right after importing, which must not export.
 _skip_next_export = False
 
 
@@ -79,41 +70,27 @@ def export_asset(path, fmt):
 @persistent
 def _on_save_post(*_args):
     global _skip_next_export
+    blend, target = _session["blend"], _session["target"]
+    if not blend or os.path.normpath(bpy.data.filepath) != blend:
+        return
     if _skip_next_export:
         _skip_next_export = False
         return
-    scene = bpy.context.scene
-    target = scene.get(PROP_TARGET)
-    if not target or not scene.get(PROP_ENABLED, True):
-        return
-    blend = bpy.data.filepath
-    target_abs = os.path.normpath(os.path.join(os.path.dirname(blend), target))
-    fmt = scene.get(PROP_FORMAT) or _format_for(target_abs)
-    export_asset(target_abs, fmt)
-    _write_record(blend, target_abs)
-    print(f"Blendot: exported {target_abs}")
+    export_asset(target, _format_for(target))
+    _write_record(blend, target)
+    print(f"Blendot: exported {target}")
 
 
-def register():
-    handlers = bpy.app.handlers.save_post
-    if not any(getattr(h, "__name__", "") == "_on_save_post" for h in handlers):
-        handlers.append(_on_save_post)
+def start_session(target, blend):
+    _session["blend"] = os.path.normpath(blend)
+    _session["target"] = os.path.normpath(target)
+    if _on_save_post not in bpy.app.handlers.save_post:
+        bpy.app.handlers.save_post.append(_on_save_post)
 
-
-def unregister():
-    handlers = bpy.app.handlers.save_post
-    for h in [h for h in handlers if getattr(h, "__name__", "") == "_on_save_post"]:
-        handlers.remove(h)
-
-
-# --- launched from Godot -------------------------------------------------------
 
 def _parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    opts = {}
-    for key, value in zip(argv[::2], argv[1::2]):
-        opts[key.lstrip("-")] = value
-    return opts
+    return {key.lstrip("-"): value for key, value in zip(argv[::2], argv[1::2])}
 
 
 def _open_or_create(target, blend):
@@ -124,10 +101,6 @@ def _open_or_create(target, blend):
 
     bpy.ops.wm.read_homefile(use_empty=True)
     import_asset(target)
-    scene = bpy.context.scene
-    scene[PROP_TARGET] = os.path.relpath(target, os.path.dirname(blend))
-    scene[PROP_FORMAT] = _format_for(target)
-    scene[PROP_ENABLED] = True
     _skip_next_export = True  # don't re-export an unedited import
     bpy.ops.wm.save_as_mainfile(filepath=blend)
     _write_record(blend, target)
@@ -135,9 +108,9 @@ def _open_or_create(target, blend):
 
 
 if __name__ == "__main__":
-    register()
     opts = _parse_args()
     if "target" in opts and "blend" in opts:
+        start_session(opts["target"], opts["blend"])
         # Defer until Blender's UI is ready so operators have a valid context.
         bpy.app.timers.register(
             lambda: _open_or_create(opts["target"], opts["blend"]), first_interval=0.1)
