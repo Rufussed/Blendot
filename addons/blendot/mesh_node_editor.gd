@@ -26,6 +26,7 @@ static func register_settings() -> void:
 	if not ProjectSettings.has_setting(SETTING_MESH_DIR):
 		ProjectSettings.set_setting(SETTING_MESH_DIR, "res://blendot_meshes")
 	ProjectSettings.set_initial_value(SETTING_MESH_DIR, "res://blendot_meshes")
+	ProjectSettings.set_as_basic(SETTING_MESH_DIR, true)
 	ProjectSettings.add_property_info({"name": SETTING_MESH_DIR, "type": TYPE_STRING,
 		"hint": PROPERTY_HINT_DIR})
 

@@ -38,6 +38,7 @@ static func _project_setting(setting: String, default: Variant, info: Dictionary
 	if not ProjectSettings.has_setting(setting):
 		ProjectSettings.set_setting(setting, default)
 	ProjectSettings.set_initial_value(setting, default)
+	ProjectSettings.set_as_basic(setting, true)  # visible without "Advanced Settings"
 	info["name"] = setting
 	ProjectSettings.add_property_info(info)
 
