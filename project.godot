@@ -1,0 +1,9 @@
+; Engine configuration file.
+config_version=5
+
+[application]
+config/name="Blendot Dev"
+config/features=PackedStringArray("4.7")
+
+[editor_plugins]
+enabled=PackedStringArray("res://addons/blendot/plugin.cfg")
