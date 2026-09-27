@@ -1,0 +1,7 @@
+# The Asset Library downloads the repository archive; ship only the addon.
+/.gitattributes export-ignore
+/.gitignore     export-ignore
+/project.godot  export-ignore
+/PLAN.md        export-ignore
+/docs           export-ignore
+/test_assets    export-ignore
