@@ -5,6 +5,7 @@ extends RefCounted
 ## the node with an instance of it that Godot imports directly.
 
 const MeshNodeEditor := preload("res://addons/blendot/mesh_node_editor.gd")
+const References := preload("res://addons/blendot/references.gd")
 const IMPORT_TIMEOUT_MSEC := 120000
 
 var _launcher: Node
@@ -35,32 +36,57 @@ func _confirm(node: MeshInstance3D, blend: String) -> void:
 	if FileAccess.file_exists(blend):
 		_alert("%s already exists. Choose another name." % blend)
 		return
-	var warnings := PackedStringArray()
+	var file_name := blend.get_file().get_basename()
+	var lines := PackedStringArray([
+		"Save %s as %s and replace it with an instance of that file?" % [node.name, blend], "",
+		"- Position, rotation and scale stay the same.",
+		"- Children you added in Godot move onto the new instance.",
+		"- References to it in this scene (exported properties, animation tracks) are updated.",
+		"- Everyone opening this project will need Blender installed."])
 	if node.get_script():
-		warnings.append("- Its script (%s) won't carry over; reattach it to the new node."
+		lines.append("- Its script (%s) won't carry over; reattach it to the new node."
 			% node.get_script().resource_path.get_file())
 	var signal_count := 0
 	for sig in node.get_signal_list():
 		for c in node.get_signal_connection_list(sig.name):
 			if c.flags & CONNECT_PERSIST:
 				signal_count += 1
+	for c in node.get_incoming_connections():
+		if c.flags & CONNECT_PERSIST:
+			signal_count += 1
 	if signal_count:
-		warnings.append("- Its %d signal connection(s) won't carry over." % signal_count)
+		lines.append("- Its %d signal connection(s) won't carry over." % signal_count)
+
+	var box := VBoxContainer.new()
+	var text := Label.new()
+	text.text = "\n".join(lines)
+	box.add_child(text)
+	var rename := CheckBox.new()
+	var renaming := file_name != String(node.name)
+	var mentions := References.script_mentions(node.name) if renaming else PackedStringArray()
+	if renaming:
+		rename.text = "Rename node %s to %s" % [node.name, file_name]
+		rename.button_pressed = mentions.is_empty()  # don't surprise scripts that use it
+		box.add_child(rename)
+		if mentions:
+			var warn := Label.new()
+			warn.text = ("Scripts that may refer to it by name (not changed; update them "
+				+ "yourself if you rename):\n  " + "\n  ".join(mentions))
+			warn.add_theme_color_override("font_color",
+				EditorInterface.get_editor_theme().get_color("warning_color", "Editor"))
+			box.add_child(warn)
+
 	var dialog := ConfirmationDialog.new()
 	dialog.title = "Blendot: save as .blend asset"
-	dialog.dialog_text = ("Save %s as %s and replace it with an instance of that file?\n\n"
-		+ "- Position, rotation and scale stay the same; the node is renamed %s.\n"
-		+ "- Children you added in Godot move onto the new instance.\n"
-		+ "- Everyone opening this project will need Blender installed.\n%s") \
-		% [node.name, blend, blend.get_file().get_basename(), "\n".join(warnings)]
+	dialog.add_child(box)
 	dialog.ok_button_text = "Save and Replace"
-	dialog.confirmed.connect(func(): _run(node, blend))
+	dialog.confirmed.connect(func(): _run(node, blend, renaming and rename.button_pressed))
 	dialog.visibility_changed.connect(func():
 		if not dialog.visible: dialog.queue_free())
 	EditorInterface.popup_dialog_centered(dialog)
 
 
-func _run(node: MeshInstance3D, blend: String) -> void:
+func _run(node: MeshInstance3D, blend: String, rename: bool) -> void:
 	var blend_abs := ProjectSettings.globalize_path(blend)
 	DirAccess.make_dir_recursive_absolute(blend_abs.get_base_dir())
 
@@ -95,7 +121,7 @@ func _run(node: MeshInstance3D, blend: String) -> void:
 	if not is_instance_valid(node) or not node.is_inside_tree():
 		_alert("%s was saved, but the node is gone, so nothing was replaced." % blend)
 		return
-	_replace(node, scene)
+	_replace(node, scene, rename)
 
 
 ## Waits for Godot to import the new file, then loads it.
@@ -113,12 +139,12 @@ func _import(blend: String) -> PackedScene:
 	return null
 
 
-func _replace(node: MeshInstance3D, scene: PackedScene) -> void:
+func _replace(node: MeshInstance3D, scene: PackedScene, rename: bool) -> void:
 	var owner := node.owner if node.owner else node
 	var parent := node.get_parent()
 	var instance := scene.instantiate(PackedScene.GEN_EDIT_STATE_INSTANCE)
-	# Named after the file, as if it had been dragged in from the FileSystem dock.
-	var new_name := StringName(scene.resource_path.get_file().get_basename())
+	# Optionally named after the file, as if dragged in from the FileSystem dock.
+	var new_name := StringName(scene.resource_path.get_file().get_basename()) if rename else node.name
 	instance.transform = node.transform
 	# Children added in Godot move over; Blendot's own are now inside the .blend.
 	var movers := node.get_children().filter(func(c): return not c.has_meta(MeshNodeEditor.META_ID))
@@ -161,9 +187,21 @@ func _replace(node: MeshInstance3D, scene: PackedScene) -> void:
 		for o in owned[c]:
 			undo.add_undo_method(o, "set_owner", owner)
 	undo.add_undo_reference(node)
+
+	var fixes := References.scene_fixes(node, instance, new_name)
+	for f in fixes.props:
+		undo.add_do_property(f[0], f[1], f[3])
+		undo.add_undo_property(f[0], f[1], f[2])
+	for t in fixes.tracks:
+		undo.add_do_method(t[0], "track_set_path", t[1], t[3])
+		undo.add_undo_method(t[0], "track_set_path", t[1], t[2])
 	undo.commit_action()
+	if fixes.readonly:
+		_alert("These animations live in other files and still use the old path; "
+			+ "update them yourself:\n" + "\n".join(fixes.readonly))
 	EditorInterface.edit_node(instance)
-	print("Blendot: replaced %s with an instance of %s" % [node.name, scene.resource_path])
+	print("Blendot: replaced %s with an instance of %s (%d references updated)"
+		% [node.name, scene.resource_path, fixes.props.size() + fixes.tracks.size()])
 
 
 func _alert(text: String) -> void:

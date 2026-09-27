@@ -80,6 +80,11 @@ the hash last recorded in `<blend>.json`:
      its sidecar, so Blender child objects come along) and replaces the node with
      an instance of it: same name/transform, Godot-added children moved over,
      one undo step. Scripts/signals on the node are warned about, not moved.
+     Renaming the node after the file is a checkbox, on by default unless scripts
+     seem to use the name ($Name, "Name", paths); those lines are listed, never
+     edited. Scene references (exported Node/NodePath properties, arrays of them,
+     local AnimationPlayer tracks) are retargeted in the same undo step, rename or
+     not; animations stored in other files are reported instead.
 
 ### FBX round-trip findings (tested on Blender, Maya/Arnold and Mixamo FBX)
 - Scale, axes, bones and animation length: stable across repeated round trips.
