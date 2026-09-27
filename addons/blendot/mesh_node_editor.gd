@@ -263,11 +263,13 @@ func _apply(node: MeshInstance3D, parsed: Dictionary, glb_abs: String) -> void:
 		if e.mesh:
 			mesh = _persist(e.mesh, "%s_%s.res" % [base, e.id.validate_filename()], materials, saved)
 		var target: Node3D = existing.get(e.id)
+		var is_new := false
 		if target and (target is MeshInstance3D) != (mesh != null):
 			target = null  # became/stopped being a mesh: replace the node
 		if target == null:
 			target = MeshInstance3D.new() if mesh else Node3D.new()
 			target.set_meta(META_ID, e.id)
+			is_new = true
 			undo.add_do_method(parent, "add_child", target)
 			undo.add_do_method(target, "set_owner", owner)
 			undo.add_do_reference(target)
@@ -288,10 +290,10 @@ func _apply(node: MeshInstance3D, parsed: Dictionary, glb_abs: String) -> void:
 				undo.add_undo_method(old_parent, "move_child", target, target.get_index())
 				undo.add_undo_method(old_parent, "add_child", target)
 				undo.add_undo_method(parent, "remove_child", target)
-		_record(undo, target, "name", StringName(e.name))
-		_record(undo, target, "transform", e.transform)
+		_record(undo, target, "name", StringName(e.name), is_new)
+		_record(undo, target, "transform", e.transform, is_new)
 		if mesh:
-			_record(undo, target, "mesh", mesh)
+			_record(undo, target, "mesh", mesh, is_new)
 		resolved[e.id] = target
 
 	# Objects deleted in Blender: remove the nodes Blendot made for them (and
@@ -316,9 +318,12 @@ func _apply(node: MeshInstance3D, parsed: Dictionary, glb_abs: String) -> void:
 	print("Blendot: updated %s from Blender (%d child objects)" % [node.name, parsed.entries.size()])
 
 
-func _record(undo: EditorUndoRedoManager, obj: Object, prop: String, value: Variant) -> void:
+## A new node is simply removed on undo, so it needs no undo values.
+func _record(undo: EditorUndoRedoManager, obj: Object, prop: String, value: Variant,
+		is_new: bool) -> void:
 	undo.add_do_property(obj, prop, value)
-	undo.add_undo_property(obj, prop, obj.get(prop))
+	if not is_new:
+		undo.add_undo_property(obj, prop, obj.get(prop))
 
 
 static func _owned_subtree(n: Node, owner: Node) -> Array:

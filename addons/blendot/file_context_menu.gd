@@ -30,7 +30,11 @@ func _popup_menu(paths: PackedStringArray) -> void:
 
 
 func _on_edit(paths: PackedStringArray) -> void:
-	var path := paths[0]
+	edit_path(paths[0])
+
+
+## What "Edit in Blender" does for a file, wherever it's triggered from.
+func edit_path(path: String) -> void:
 	if path.get_extension().to_lower() == "blend":
 		_launcher.open_blend(path)
 	elif _converter.can_convert(path) and Launcher.mode() == Launcher.MODE_CONVERT:

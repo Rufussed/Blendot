@@ -98,4 +98,6 @@ the hash last recorded in `<blend>.json`:
   normal maps survive. Use glb, or Godot material overrides, where it matters.
 - FBX older than 7.1 (e.g. 6100) and ASCII FBX can't be imported by Blender;
   Godot shows an explanation instead of launching an empty Blender.
-4. Advanced Import Settings button, export preset tuning, Asset Library release.
+4. Advanced Import Settings button. *(done: "Edit in Blender" next to Reimport,
+   shown for supported files; found by class name, so it degrades to absent.)*
+   Export preset tuning *(done for FBX, see findings)*. Asset Library release.

@@ -8,6 +8,7 @@ const MeshNodeEditor := preload("res://addons/blendot/mesh_node_editor.gd")
 const Cleanup := preload("res://addons/blendot/cleanup.gd")
 const Converter := preload("res://addons/blendot/converter.gd")
 const NodeToAsset := preload("res://addons/blendot/node_to_asset.gd")
+const ImportDialogButton := preload("res://addons/blendot/import_dialog_button.gd")
 const CLEANUP_MENU := "Blendot: Clean Up Unused Blender Files..."
 const SETTINGS_MENU := "Blendot: Settings..."
 
@@ -16,6 +17,7 @@ var _scene_menu: EditorContextMenuPlugin
 var _launcher: Launcher
 var _cleanup: Cleanup
 var _converter: Converter
+var _import_button: ImportDialogButton
 
 
 func _enter_tree() -> void:
@@ -32,6 +34,8 @@ func _enter_tree() -> void:
 	_cleanup = Cleanup.new(_launcher)
 	add_tool_menu_item(CLEANUP_MENU, _cleanup.run)
 	add_tool_menu_item(SETTINGS_MENU, _open_settings)
+	_import_button = ImportDialogButton.new(_file_menu.edit_path, FileMenu.SUPPORTED)
+	_import_button.attach.call_deferred()
 
 
 func _exit_tree() -> void:
@@ -39,6 +43,8 @@ func _exit_tree() -> void:
 	remove_context_menu_plugin(_scene_menu)
 	remove_tool_menu_item(CLEANUP_MENU)
 	remove_tool_menu_item(SETTINGS_MENU)
+	if _import_button:
+		_import_button.detach()
 	_launcher.queue_free()
 
 
