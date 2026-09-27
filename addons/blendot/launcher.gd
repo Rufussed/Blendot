@@ -98,7 +98,7 @@ func _ask_stale(res_path: String, asset_abs: String, blend_abs: String) -> void:
 
 
 func launch(asset_abs: String, blend_abs: String, rebuild: bool,
-		on_change: Callable = _rescan) -> void:
+		on_change: Callable = _rescan, mode := "file") -> void:
 	DirAccess.make_dir_recursive_absolute(blend_abs.get_base_dir())
 	_ensure_gdignore()
 	if rebuild and FileAccess.file_exists(blend_abs):
@@ -106,7 +106,7 @@ func launch(asset_abs: String, blend_abs: String, rebuild: bool,
 
 	var args := PackedStringArray([
 		"--python", ProjectSettings.globalize_path(BRIDGE),
-		"--", "--target", asset_abs, "--blend", blend_abs,
+		"--", "--target", asset_abs, "--blend", blend_abs, "--mode", mode,
 	])
 	var pid := OS.create_process(_blender_path(), args)
 	if pid <= 0:

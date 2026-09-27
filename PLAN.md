@@ -56,5 +56,11 @@ the hash last recorded in `<blend>.json`:
 1. **FileSystem right-click, sidecar mode.** Create/open `.blend`, export on save,
    stale-hash dialog, Godot rescans on change. *(done)*
 2. Scene-tree `MeshInstance3D` entry with mesh swap + undo. *(done)*
+   - Blender's world origin = the node's origin. The main object's offset is baked
+     into the node's mesh (so moving it in Blender re-pivots the mesh).
+   - Other Blender objects become descendant nodes with Blender's hierarchy and
+     origins; matched by a `blendot_id` custom property (glTF extras) so renames
+     and reparenting update the same node, keeping Godot-added scripts/children.
+   - Godot materials are kept by material name.
 3. Settings panel; convert mode with UID carry-over.
 4. Advanced Import Settings button, export preset tuning, Asset Library release.

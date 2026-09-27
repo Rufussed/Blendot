@@ -12,12 +12,17 @@ import hashlib
 import json
 import os
 import sys
+import uuid
 
 import bpy
 from bpy.app.handlers import persistent
 
-# The one .blend -> asset pair this Blender session exports for.
-_session = {"blend": None, "target": None}
+# The one .blend -> asset pair this Blender session exports for. "node" mode
+# edits a Godot MeshInstance3D: objects carry IDs so Godot can follow them.
+_session = {"blend": None, "target": None, "mode": "file"}
+
+PROP_ID = "blendot_id"
+PROP_MAIN = "blendot_main"
 
 # Set for the initial save right after importing, which must not export.
 _skip_next_export = False
@@ -58,7 +63,8 @@ def export_asset(path, fmt):
                                  apply_scale_options="FBX_SCALE_ALL",
                                  add_leaf_bones=False)
     elif fmt == "glb":
-        bpy.ops.export_scene.gltf(filepath=path, export_format="GLB")
+        bpy.ops.export_scene.gltf(filepath=path, export_format="GLB",
+                                  export_extras=True, export_apply=True)
     elif fmt == "gltf":
         bpy.ops.export_scene.gltf(filepath=path, export_format="GLTF_SEPARATE")
     elif fmt == "obj":
@@ -67,11 +73,37 @@ def export_asset(path, fmt):
         raise ValueError(f"Blendot: unsupported format '{fmt}'")
 
 
+def _is_session_file():
+    blend = _session["blend"]
+    return blend and os.path.normpath(bpy.data.filepath) == blend
+
+
+def _assign_ids():
+    """Give every object a stable ID (copied objects get fresh ones)."""
+    seen = set()
+    for obj in sorted(bpy.data.objects, key=lambda o: o.name):
+        oid = obj.get(PROP_ID)
+        if not oid or oid in seen:
+            oid = obj[PROP_ID] = uuid.uuid4().hex[:12]
+        seen.add(oid)
+    # .blend files from before main-object marking: adopt the first mesh.
+    if not any(o.get(PROP_MAIN) for o in bpy.data.objects):
+        meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+        if meshes:
+            meshes[0][PROP_MAIN] = True
+
+
+@persistent
+def _on_save_pre(*_args):
+    if _is_session_file() and _session["mode"] == "node":
+        _assign_ids()
+
+
 @persistent
 def _on_save_post(*_args):
     global _skip_next_export
     blend, target = _session["blend"], _session["target"]
-    if not blend or os.path.normpath(bpy.data.filepath) != blend:
+    if not _is_session_file():
         return
     if _skip_next_export:
         _skip_next_export = False
@@ -81,9 +113,12 @@ def _on_save_post(*_args):
     print(f"Blendot: exported {target}")
 
 
-def start_session(target, blend):
+def start_session(target, blend, mode="file"):
     _session["blend"] = os.path.normpath(blend)
     _session["target"] = os.path.normpath(target)
+    _session["mode"] = mode
+    if _on_save_pre not in bpy.app.handlers.save_pre:
+        bpy.app.handlers.save_pre.append(_on_save_pre)
     if _on_save_post not in bpy.app.handlers.save_post:
         bpy.app.handlers.save_post.append(_on_save_post)
 
@@ -111,6 +146,11 @@ def _open_or_create(target, blend):
 
     bpy.ops.wm.read_homefile(use_empty=True)
     import_asset(target)
+    if _session["mode"] == "node":
+        # Godot exported exactly one object: the node's own mesh.
+        meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+        if meshes:
+            meshes[0][PROP_MAIN] = True
     _set_material_preview()
     _skip_next_export = True  # don't re-export an unedited import
     bpy.ops.wm.save_as_mainfile(filepath=blend)
@@ -121,7 +161,7 @@ def _open_or_create(target, blend):
 if __name__ == "__main__":
     opts = _parse_args()
     if "target" in opts and "blend" in opts:
-        start_session(opts["target"], opts["blend"])
+        start_session(opts["target"], opts["blend"], opts.get("mode", "file"))
         # Defer until Blender's UI is ready so operators have a valid context.
         bpy.app.timers.register(
             lambda: _open_or_create(opts["target"], opts["blend"]), first_interval=0.1)
