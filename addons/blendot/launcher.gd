@@ -7,6 +7,9 @@ const SETTING_BLENDER := "blendot/blender_path"
 const SETTING_GODOT_BLENDER := "filesystem/import/blender/blender_path"
 const SETTING_SIDECAR_DIR := "blendot/sidecar_dir"
 const SETTING_ON_CHANGE := "blendot/on_external_change"
+const SETTING_MODE := "blendot/mode"
+const MODE_SIDECAR := 0
+const MODE_CONVERT := 1
 const ON_CHANGE_ASK := 0
 const ON_CHANGE_USE_NEW := 1
 const ON_CHANGE_KEEP_MINE := 2
@@ -29,6 +32,9 @@ static func register_settings() -> void:
 
 	_project_setting(SETTING_SIDECAR_DIR, "res://.blendot",
 		{"type": TYPE_STRING, "hint": PROPERTY_HINT_DIR})
+	_project_setting(SETTING_MODE, MODE_SIDECAR,
+		{"type": TYPE_INT, "hint": PROPERTY_HINT_ENUM,
+		"hint_string": "Sidecar (keep FBX/glb; hidden .blend exports to it),Convert (replace FBX/glb with a .blend)"})
 	_project_setting(SETTING_ON_CHANGE, ON_CHANGE_ASK,
 		{"type": TYPE_INT, "hint": PROPERTY_HINT_ENUM,
 		"hint_string": "Ask,Use New File,Keep My Blend"})
@@ -180,6 +186,26 @@ func _focus_existing(blend_abs: String) -> void:
 	EditorInterface.get_editor_toaster().push_toast(
 		"Blendot: %s is already open in Blender." % blend_abs.get_file().trim_suffix(".blend"),
 		EditorToaster.SEVERITY_INFO)
+
+
+## Opens a .blend that Godot imports directly; Godot reimports it on each save.
+func open_blend(res_path: String) -> void:
+	var blend_abs := ProjectSettings.globalize_path(res_path)
+	if is_open(blend_abs):
+		_focus_existing(blend_abs)
+		return
+	var pid := OS.create_process(_blender_path(), PackedStringArray([
+		"--python", ProjectSettings.globalize_path(BRIDGE),
+		"--", "--blend", blend_abs, "--mode", "plain"]))
+	if pid <= 0:
+		push_error("Blendot: could not start Blender at '%s'." % _blender_path())
+		return
+	_running[blend_abs] = pid
+	watch(blend_abs, _rescan)
+
+
+static func mode() -> int:
+	return int(ProjectSettings.get_setting(SETTING_MODE, MODE_SIDECAR))
 
 
 ## Calls on_change(path) whenever the file at path is rewritten.

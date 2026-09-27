@@ -275,10 +275,31 @@ def _open_or_create(target, blend):
     return None  # stop the timer
 
 
+def convert(target, blend):
+    """Import target into a new .blend that replaces it (run with blender -b)."""
+    bpy.ops.wm.read_homefile(use_empty=True)
+    import_asset(target)
+    _set_material_preview()
+    bpy.ops.wm.save_as_mainfile(filepath=blend)
+    print(f"Blendot: converted {target} -> {blend}")
+
+
+def _open_plain(blend):
+    bpy.ops.wm.open_mainfile(filepath=blend)
+    _set_material_preview()
+    return None
+
+
 if __name__ == "__main__":
     opts = _parse_args()
-    if "target" in opts and "blend" in opts:
-        start_session(opts["target"], opts["blend"], opts.get("mode", "file"))
+    mode = opts.get("mode", "file")
+    if mode == "convert":
+        convert(opts["target"], opts["blend"])
+    elif mode == "plain":
+        # A .blend Godot imports directly: nothing to export, Godot reimports it.
+        bpy.app.timers.register(lambda: _open_plain(opts["blend"]), first_interval=0.1)
+    elif "target" in opts and "blend" in opts:
+        start_session(opts["target"], opts["blend"], mode)
         # Defer until Blender's UI is ready so operators have a valid context.
         bpy.app.timers.register(
             lambda: _open_or_create(opts["target"], opts["blend"]), first_interval=0.1)

@@ -66,7 +66,20 @@ the hash last recorded in `<blend>.json`:
      and meshes no saved or open scene uses, and moves them to the system trash.
    - Editing something already open in Blender raises that window (Hyprland)
      or says so, instead of starting a second Blender on the same .blend.
-3. Settings panel; convert mode with UID carry-over.
+3. Settings in Project Settings (basic) + Tools menu shortcut. *(done)*
+   Convert mode with UID carry-over. *(done)*
+   - Setting `blendot/mode`: Sidecar / Convert. In Sidecar mode FBX/glb files also
+     get "Convert to .blend..."; in Convert mode "Edit in Blender" converts first.
+   - Convert: save scenes, create the .blend (copying an up-to-date sidecar, else a
+     background Blender import), write its .import with the old UID and non-format
+     import params, trash the old file, rewrite paths in .tscn/.tres, list scripts
+     that still mention the old path, rescan and reload open scenes.
+   - .blend files get "Edit in Blender" (opens directly; Godot reimports on save).
+   - OBJ isn't convertible (imports as a Mesh, not a scene).
+   - Nodes: "Save as .blend Asset..." on a MeshInstance3D writes a .blend (from
+     its sidecar, so Blender child objects come along) and replaces the node with
+     an instance of it: same name/transform, Godot-added children moved over,
+     one undo step. Scripts/signals on the node are warned about, not moved.
 
 ### FBX round-trip findings (tested on Blender, Maya/Arnold and Mixamo FBX)
 - Scale, axes, bones and animation length: stable across repeated round trips.

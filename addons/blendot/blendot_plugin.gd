@@ -6,6 +6,8 @@ const SceneMenu := preload("res://addons/blendot/scene_context_menu.gd")
 const Launcher := preload("res://addons/blendot/launcher.gd")
 const MeshNodeEditor := preload("res://addons/blendot/mesh_node_editor.gd")
 const Cleanup := preload("res://addons/blendot/cleanup.gd")
+const Converter := preload("res://addons/blendot/converter.gd")
+const NodeToAsset := preload("res://addons/blendot/node_to_asset.gd")
 const CLEANUP_MENU := "Blendot: Clean Up Unused Blender Files..."
 const SETTINGS_MENU := "Blendot: Settings..."
 
@@ -13,6 +15,7 @@ var _file_menu: EditorContextMenuPlugin
 var _scene_menu: EditorContextMenuPlugin
 var _launcher: Launcher
 var _cleanup: Cleanup
+var _converter: Converter
 
 
 func _enter_tree() -> void:
@@ -20,9 +23,11 @@ func _enter_tree() -> void:
 	MeshNodeEditor.register_settings()
 	_launcher = Launcher.new()
 	EditorInterface.get_base_control().add_child(_launcher)
-	_file_menu = FileMenu.new(_launcher)
+	_converter = Converter.new(_launcher)
+	_file_menu = FileMenu.new(_launcher, _converter)
 	add_context_menu_plugin(EditorContextMenuPlugin.CONTEXT_SLOT_FILESYSTEM, _file_menu)
-	_scene_menu = SceneMenu.new(MeshNodeEditor.new(_launcher))
+	var mesh_editor := MeshNodeEditor.new(_launcher)
+	_scene_menu = SceneMenu.new(mesh_editor, NodeToAsset.new(_launcher, mesh_editor))
 	add_context_menu_plugin(EditorContextMenuPlugin.CONTEXT_SLOT_SCENE_TREE, _scene_menu)
 	_cleanup = Cleanup.new(_launcher)
 	add_tool_menu_item(CLEANUP_MENU, _cleanup.run)
