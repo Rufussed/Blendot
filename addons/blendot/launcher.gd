@@ -12,7 +12,7 @@ const ON_CHANGE_USE_NEW := 1
 const ON_CHANGE_KEEP_MINE := 2
 const BRIDGE := "res://addons/blendot/blender/blendot_bridge.py"
 
-## abs asset path -> last seen modified time, for assets being edited.
+## abs path -> {"mtime": int, "on_change": Callable}, for files Blender writes.
 var _watched := {}
 var _timer: Timer
 
@@ -53,17 +53,17 @@ func edit_file(res_path: String) -> void:
 	var blend_abs := ProjectSettings.globalize_path(blend)
 
 	if not FileAccess.file_exists(blend):
-		_launch(asset_abs, blend_abs, false)
+		launch(asset_abs, blend_abs, false)
 		return
 	if FileAccess.get_sha256(res_path) == _recorded_hash(blend):
-		_launch(asset_abs, blend_abs, false)
+		launch(asset_abs, blend_abs, false)
 		return
 
 	match int(ProjectSettings.get_setting(SETTING_ON_CHANGE, ON_CHANGE_ASK)):
 		ON_CHANGE_USE_NEW:
-			_launch(asset_abs, blend_abs, true)
+			launch(asset_abs, blend_abs, true)
 		ON_CHANGE_KEEP_MINE:
-			_launch(asset_abs, blend_abs, false)
+			launch(asset_abs, blend_abs, false)
 		_:
 			_ask_stale(res_path, asset_abs, blend_abs)
 
@@ -88,16 +88,17 @@ func _ask_stale(res_path: String, asset_abs: String, blend_abs: String) -> void:
 		+ "Keep My Blend: open your .blend; your next save overwrites their changes.") % res_path
 	dialog.ok_button_text = "Use New File"
 	dialog.add_button("Keep My Blend", true, "keep")
-	dialog.confirmed.connect(func(): _launch(asset_abs, blend_abs, true))
+	dialog.confirmed.connect(func(): launch(asset_abs, blend_abs, true))
 	dialog.custom_action.connect(func(_a):
 		dialog.hide()
-		_launch(asset_abs, blend_abs, false))
+		launch(asset_abs, blend_abs, false))
 	dialog.visibility_changed.connect(func():
 		if not dialog.visible: dialog.queue_free())
 	EditorInterface.popup_dialog_centered(dialog)
 
 
-func _launch(asset_abs: String, blend_abs: String, rebuild: bool) -> void:
+func launch(asset_abs: String, blend_abs: String, rebuild: bool,
+		on_change: Callable = _rescan) -> void:
 	DirAccess.make_dir_recursive_absolute(blend_abs.get_base_dir())
 	_ensure_gdignore()
 	if rebuild and FileAccess.file_exists(blend_abs):
@@ -113,7 +114,12 @@ func _launch(asset_abs: String, blend_abs: String, rebuild: bool) -> void:
 			% [_blender_path(), SETTING_BLENDER])
 		return
 	print("Blendot: editing %s in Blender (sidecar %s)" % [asset_abs, blend_abs])
-	_watched[asset_abs] = FileAccess.get_modified_time(asset_abs)
+	watch(asset_abs, on_change)
+
+
+## Calls on_change(path) whenever the file at path is rewritten.
+func watch(path: String, on_change: Callable) -> void:
+	_watched[path] = {"mtime": FileAccess.get_modified_time(path), "on_change": on_change}
 	_timer.start()
 
 
@@ -133,11 +139,22 @@ func _ensure_gdignore() -> void:
 
 
 func _poll() -> void:
-	var changed := false
-	for path in _watched:
+	var rescan := false
+	for path in _watched.keys():
+		var entry: Dictionary = _watched[path]
+		if not FileAccess.file_exists(path):
+			continue  # deleted or mid-rewrite; wait for it to come back
 		var mtime := FileAccess.get_modified_time(path)
-		if mtime != _watched[path]:
-			_watched[path] = mtime
-			changed = true
-	if changed:
-		EditorInterface.get_resource_filesystem().scan()
+		if mtime == entry.mtime:
+			continue
+		entry.mtime = mtime
+		if entry.on_change == _rescan:
+			rescan = true  # one scan covers every changed asset
+		else:
+			entry.on_change.call(path)
+	if rescan:
+		_rescan("")
+
+
+func _rescan(_path: String) -> void:
+	EditorInterface.get_resource_filesystem().scan()

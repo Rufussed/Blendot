@@ -93,14 +93,25 @@ def _parse_args():
     return {key.lstrip("-"): value for key, value in zip(argv[::2], argv[1::2])}
 
 
+def _set_material_preview():
+    for screen in bpy.data.screens:
+        for area in screen.areas:
+            if area.type == "VIEW_3D":
+                for space in area.spaces:
+                    if space.type == "VIEW_3D":
+                        space.shading.type = "MATERIAL"
+
+
 def _open_or_create(target, blend):
     global _skip_next_export
     if os.path.exists(blend):
         bpy.ops.wm.open_mainfile(filepath=blend)
+        _set_material_preview()
         return None
 
     bpy.ops.wm.read_homefile(use_empty=True)
     import_asset(target)
+    _set_material_preview()
     _skip_next_export = True  # don't re-export an unedited import
     bpy.ops.wm.save_as_mainfile(filepath=blend)
     _write_record(blend, target)

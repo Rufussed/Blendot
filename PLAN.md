@@ -55,6 +55,6 @@ the hash last recorded in `<blend>.json`:
 
 1. **FileSystem right-click, sidecar mode.** Create/open `.blend`, export on save,
    stale-hash dialog, Godot rescans on change. *(done)*
-2. Scene-tree `MeshInstance3D` entry with mesh swap + undo.
+2. Scene-tree `MeshInstance3D` entry with mesh swap + undo. *(done)*
 3. Settings panel; convert mode with UID carry-over.
 4. Advanced Import Settings button, export preset tuning, Asset Library release.
