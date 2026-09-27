@@ -63,4 +63,17 @@ the hash last recorded in `<blend>.json`:
      and reparenting update the same node, keeping Godot-added scripts/children.
    - Godot materials are kept by material name.
 3. Settings panel; convert mode with UID carry-over.
+
+### FBX round-trip findings (tested on Blender, Maya/Arnold and Mixamo FBX)
+- Scale, axes, bones and animation length: stable across repeated round trips.
+- Animation names: Blender adds "<object>|" each trip; the bridge strips it on
+  import and exports takes under the action name, so names stay unchanged.
+- Textures on Arnold/Maya materials (`Maya|baseColor`...) aren't wired by
+  Blender's importer; the bridge wires them from the FBX connections. Exports
+  embed textures.
+- Known loss: roughness/metallic maps. Blender exports roughness as FBX
+  "ShininessExponent", which Godot doesn't read as roughness. Base colour and
+  normal maps survive. Use glb, or Godot material overrides, where it matters.
+- FBX older than 7.1 (e.g. 6100) and ASCII FBX can't be imported by Blender;
+  Godot shows an explanation instead of launching an empty Blender.
 4. Advanced Import Settings button, export preset tuning, Asset Library release.

@@ -48,6 +48,15 @@ func _ready() -> void:
 
 
 func edit_file(res_path: String) -> void:
+	var problem := _unsupported_reason(res_path)
+	if problem:
+		var dialog := AcceptDialog.new()
+		dialog.title = "Blendot: can't open in Blender"
+		dialog.dialog_text = problem
+		dialog.visibility_changed.connect(func():
+			if not dialog.visible: dialog.queue_free())
+		EditorInterface.popup_dialog_centered(dialog)
+		return
 	var blend := sidecar_blend_path(res_path)
 	var asset_abs := ProjectSettings.globalize_path(res_path)
 	var blend_abs := ProjectSettings.globalize_path(blend)
@@ -66,6 +75,27 @@ func edit_file(res_path: String) -> void:
 			launch(asset_abs, blend_abs, false)
 		_:
 			_ask_stale(res_path, asset_abs, blend_abs)
+
+
+## Blender imports binary FBX 7.1 (7100) and newer only; Godot reads older
+## and ASCII FBX, so such files can look fine in Godot yet fail in Blender.
+func _unsupported_reason(res_path: String) -> String:
+	if res_path.get_extension().to_lower() != "fbx":
+		return ""
+	var f := FileAccess.open(res_path, FileAccess.READ)
+	if f == null:
+		return "Could not read %s." % res_path
+	var magic := f.get_buffer(18).get_string_from_ascii()
+	if magic != "Kaydara FBX Binary":
+		return ("%s is a text (ASCII) FBX, which Blender can't import.\n"
+			+ "Re-export it as binary FBX, or convert it to .glb.") % res_path.get_file()
+	f.seek(23)
+	var version := f.get_32()
+	if version < 7100:
+		return ("%s is FBX version %d.%d, but Blender only imports FBX 7.1 and newer.\n"
+			+ "Re-export it from its source tool as FBX 7.x (2011 or later), or convert it to .glb.") \
+			% [res_path.get_file(), version / 1000, version % 1000 / 100]
+	return ""
 
 
 func sidecar_blend_path(res_path: String) -> String:

@@ -11,6 +11,7 @@ elsewhere never exports.
 import hashlib
 import json
 import os
+import re
 import sys
 import uuid
 
@@ -45,10 +46,106 @@ def _format_for(path):
     return os.path.splitext(path)[1].lower().lstrip(".")
 
 
+# Blender's FBX importer names actions "<object>|<take>[|<layer>]"; strip that
+# back to the take name so animation names survive round trips unchanged.
+_GENERIC_LAYER = re.compile(r"\|(Base ?Layer|Layer ?\d*|AnimLayer\d*)$", re.IGNORECASE)
+
+
+def _restore_take_names():
+    for action in bpy.data.actions:
+        name = action.name
+        for user in [o for o in bpy.data.objects if o.animation_data]:
+            if user.animation_data.action == action and name.startswith(user.name + "|"):
+                name = name[len(user.name) + 1:]
+                break
+        else:
+            name = name.split("|", 1)[1] if "|" in name else name
+        action.name = _GENERIC_LAYER.sub("", name)
+
+
+# FBX material property (lowercase, without a "Maya|"-style prefix) ->
+# (Principled BSDF input, is colour data). Blender's importer only knows the
+# classic names, so textures on e.g. Arnold/Maya materials arrive unconnected.
+_TEXTURE_INPUTS = {
+    "basecolor": ("Base Color", True),
+    "diffusecolor": ("Base Color", True),
+    "diffuseroughness": ("Roughness", False),
+    "specularroughness": ("Roughness", False),
+    "roughness": ("Roughness", False),
+    "metalness": ("Metallic", False),
+    "metallic": ("Metallic", False),
+    "emissioncolor": ("Emission Color", True),
+    "emissivecolor": ("Emission Color", True),
+    "opacity": ("Alpha", False),
+    "transparencyfactor": ("Alpha", False),
+    "normalcamera": ("Normal", False),
+    "normalmap": ("Normal", False),
+}
+
+
+def _fbx_texture_links(path):
+    """(material name, image name, texture name, property) per texture->material link."""
+    from io_scene_fbx import parse_fbx
+    root, _version = parse_fbx.parse(path)
+    objects, links, videos = {}, [], {}
+    for elem in root.elems:
+        if elem.id == b"Objects":
+            for o in elem.elems:
+                objects[o.props[0]] = (o.id, o.props[1].split(b"\x00")[0].decode("utf-8", "replace"))
+    for elem in root.elems:
+        if elem.id != b"Connections":
+            continue
+        for c in elem.elems:
+            src, dst = objects.get(c.props[1]), objects.get(c.props[2])
+            if not src or not dst:
+                continue
+            if c.props[0] == b"OO" and src[0] == b"Video" and dst[0] == b"Texture":
+                videos[dst[1]] = src[1]
+            elif c.props[0] == b"OP" and src[0] == b"Texture" and dst[0] == b"Material":
+                links.append((dst[1], src[1], c.props[3].decode("utf-8", "replace")))
+    return [(mat, videos.get(tex, tex), tex, prop) for mat, tex, prop in links]
+
+
+def _link_missing_fbx_textures(path):
+    try:
+        links = _fbx_texture_links(path)
+    except Exception as err:  # never block editing over texture wiring
+        print(f"Blendot: could not read FBX texture links: {err}")
+        return
+    for mat_name, video, tex, prop in links:
+        target = _TEXTURE_INPUTS.get(prop.rsplit("|", 1)[-1].lower())
+        mat = bpy.data.materials.get(mat_name)
+        img = bpy.data.images.get(video) or bpy.data.images.get(tex)
+        if not target or not mat or not img or not mat.use_nodes:
+            continue
+        nodes, node_links = mat.node_tree.nodes, mat.node_tree.links
+        bsdf = next((n for n in nodes if n.type == "BSDF_PRINCIPLED"), None)
+        socket = bsdf.inputs.get(target[0]) if bsdf else None
+        if socket is None or socket.is_linked:
+            continue  # Blender already wired it (or another texture did)
+        image_node = nodes.new("ShaderNodeTexImage")
+        image_node.image = img
+        image_node.location = (bsdf.location.x - 600, bsdf.location.y - 300 * list(bsdf.inputs).index(socket) / 10)
+        if not target[1]:
+            img.colorspace_settings.name = "Non-Color"
+        if target[0] == "Normal":
+            normal_map = next((n for n in nodes if n.type == "NORMAL_MAP"), None) \
+                or nodes.new("ShaderNodeNormalMap")
+            node_links.new(image_node.outputs["Color"], normal_map.inputs["Color"])
+            node_links.new(normal_map.outputs["Normal"], socket)
+        elif target[0] == "Alpha":
+            node_links.new(image_node.outputs["Alpha"], socket)
+        else:
+            node_links.new(image_node.outputs["Color"], socket)
+        print(f"Blendot: linked texture {img.name} -> {mat.name}.{target[0]} (from {prop})")
+
+
 def import_asset(path):
     fmt = _format_for(path)
     if fmt == "fbx":
         bpy.ops.import_scene.fbx(filepath=path)
+        _restore_take_names()
+        _link_missing_fbx_textures(path)
     elif fmt in ("glb", "gltf"):
         bpy.ops.import_scene.gltf(filepath=path)
     elif fmt == "obj":
@@ -59,9 +156,7 @@ def import_asset(path):
 
 def export_asset(path, fmt):
     if fmt == "fbx":
-        bpy.ops.export_scene.fbx(filepath=path, use_selection=False,
-                                 apply_scale_options="FBX_SCALE_ALL",
-                                 add_leaf_bones=False)
+        _export_fbx(path)
     elif fmt == "glb":
         bpy.ops.export_scene.gltf(filepath=path, export_format="GLB",
                                   export_extras=True, export_apply=True)
@@ -71,6 +166,28 @@ def export_asset(path, fmt):
         bpy.ops.wm.obj_export(filepath=path, export_selected_objects=False)
     else:
         raise ValueError(f"Blendot: unsupported format '{fmt}'")
+
+
+def _export_fbx(path):
+    from io_scene_fbx import export_fbx_bin
+
+    # The exporter names each take "<object>|<action>"; use the action name alone
+    # so a take called "Run" comes back to Godot as "Run", not "Armature|Run".
+    original = export_fbx_bin.get_blenderID_name
+
+    def take_name(bid):
+        if isinstance(bid, tuple) and len(bid) == 2 and isinstance(bid[1], bpy.types.Action):
+            return bid[1].name
+        return original(bid)
+
+    export_fbx_bin.get_blenderID_name = take_name
+    try:
+        bpy.ops.export_scene.fbx(filepath=path, use_selection=False,
+                                 apply_scale_options="FBX_SCALE_ALL",
+                                 add_leaf_bones=False,
+                                 path_mode="COPY", embed_textures=True)
+    finally:
+        export_fbx_bin.get_blenderID_name = original
 
 
 def _is_session_file():
