@@ -242,6 +242,8 @@ func _apply(node: MeshInstance3D, parsed: Dictionary, glb_abs: String) -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
 	var saved: Array[String] = []
 
+	# Only built-in Node methods in undo steps: steps that call plugin code break
+	# if the plugin is reloaded while they're still in the history.
 	var undo := EditorInterface.get_editor_undo_redo()
 	undo.create_action("Blendot: update %s from Blender" % node.name, UndoRedo.MERGE_DISABLE, owner, true)
 
@@ -266,19 +268,26 @@ func _apply(node: MeshInstance3D, parsed: Dictionary, glb_abs: String) -> void:
 		if target == null:
 			target = MeshInstance3D.new() if mesh else Node3D.new()
 			target.set_meta(META_ID, e.id)
-			undo.add_do_method(self, "_attach", target, parent, -1, [target], owner)
+			undo.add_do_method(parent, "add_child", target)
+			undo.add_do_method(target, "set_owner", owner)
 			undo.add_do_reference(target)
-			undo.add_undo_method(self, "_detach", target)
+			undo.add_undo_method(parent, "remove_child", target)
 		else:
 			kept[e.id] = true
 			if target.get_parent() != parent:
 				var old_parent := target.get_parent()
 				var owned := _owned_subtree(target, owner)
-				undo.add_do_method(self, "_detach", target)
-				undo.add_do_method(self, "_attach", target, parent, -1, owned, owner)
-				# Undo ops run in reverse (backward_undo_ops), so: detach, then re-attach.
-				undo.add_undo_method(self, "_attach", target, old_parent, target.get_index(), owned, owner)
-				undo.add_undo_method(self, "_detach", target)
+				undo.add_do_method(old_parent, "remove_child", target)
+				undo.add_do_method(parent, "add_child", target)
+				for o in owned:
+					undo.add_do_method(o, "set_owner", owner)
+				# Undo ops run in reverse (backward_undo_ops), so these are listed
+				# last-first: detach, re-attach, restore position, restore owners.
+				for o in owned:
+					undo.add_undo_method(o, "set_owner", owner)
+				undo.add_undo_method(old_parent, "move_child", target, target.get_index())
+				undo.add_undo_method(old_parent, "add_child", target)
+				undo.add_undo_method(parent, "remove_child", target)
 		_record(undo, target, "name", StringName(e.name))
 		_record(undo, target, "transform", e.transform)
 		if mesh:
@@ -292,9 +301,13 @@ func _apply(node: MeshInstance3D, parsed: Dictionary, glb_abs: String) -> void:
 		if kept.has(id) or (gone.get_parent() and gone.get_parent().has_meta(META_ID)
 				and not kept.has(gone.get_parent().get_meta(META_ID))):
 			continue
-		undo.add_do_method(self, "_detach", gone)
-		undo.add_undo_method(self, "_attach", gone, gone.get_parent(), gone.get_index(),
-			_owned_subtree(gone, owner), owner)
+		var gone_parent := gone.get_parent()
+		undo.add_do_method(gone_parent, "remove_child", gone)
+		# Reverse order again: re-attach, restore position, restore owners.
+		for o in _owned_subtree(gone, owner):
+			undo.add_undo_method(o, "set_owner", owner)
+		undo.add_undo_method(gone_parent, "move_child", gone, gone.get_index())
+		undo.add_undo_method(gone_parent, "add_child", gone)
 		undo.add_undo_reference(gone)
 
 	undo.commit_action()
@@ -306,19 +319,6 @@ func _apply(node: MeshInstance3D, parsed: Dictionary, glb_abs: String) -> void:
 func _record(undo: EditorUndoRedoManager, obj: Object, prop: String, value: Variant) -> void:
 	undo.add_do_property(obj, prop, value)
 	undo.add_undo_property(obj, prop, obj.get(prop))
-
-
-func _attach(n: Node, parent: Node, index: int, owned: Array, owner: Node) -> void:
-	parent.add_child(n)
-	if index >= 0:
-		parent.move_child(n, mini(index, parent.get_child_count() - 1))
-	for o in owned:
-		o.owner = owner
-
-
-func _detach(n: Node) -> void:
-	if n.get_parent():
-		n.get_parent().remove_child(n)
 
 
 static func _owned_subtree(n: Node, owner: Node) -> Array:
