@@ -30,7 +30,7 @@ Blender itself can be a normal install or a Flatpak. For a Flatpak Blender, pick
 
 ### Model files (FileSystem dock)
 
-Right-click a model file and choose **Edit in Blender**. The same button also appears in the Advanced Import Settings dialog (double-click the file).
+Right-click a model file and choose **Edit in Blender**. The same button also appears in the Advanced Import Settings dialog (double-click the file), and in the Scene tree when you right-click a model you've dragged into a scene.
 
 - **Sidecar mode (default):** the first edit creates a `.blend` in `res://.blendot/`. Every save in Blender also exports over the original file, so scenes that use it don't change.
 - **Convert to .blend…:** replaces the file with a `.blend` that Godot imports directly. It keeps the file's UID and import settings, so references keep working. The old file goes to the trash. Everyone on the project then needs Blender installed.

@@ -31,7 +31,8 @@ func _enter_tree() -> void:
 	_file_menu = FileMenu.new(_session, _converter)
 	add_context_menu_plugin(EditorContextMenuPlugin.CONTEXT_SLOT_FILESYSTEM, _file_menu)
 	var mesh_editor := MeshNodeEditor.new(_session)
-	_scene_menu = SceneMenu.new(mesh_editor, NodeToAsset.new(_session, mesh_editor))
+	_scene_menu = SceneMenu.new(mesh_editor, NodeToAsset.new(_session, mesh_editor),
+		_file_menu.edit_path, FileMenu.SUPPORTED)
 	add_context_menu_plugin(EditorContextMenuPlugin.CONTEXT_SLOT_SCENE_TREE, _scene_menu)
 	_cleanup = Cleanup.new(_session)
 	add_tool_menu_item(CLEANUP_MENU, _cleanup.run)
