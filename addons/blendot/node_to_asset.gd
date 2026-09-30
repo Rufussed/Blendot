@@ -6,14 +6,15 @@ extends RefCounted
 
 const MeshNodeEditor := preload("res://addons/blendot/mesh_node_editor.gd")
 const References := preload("res://addons/blendot/references.gd")
+const BlenderSetup := preload("res://addons/blendot/blender_setup.gd")
 const IMPORT_TIMEOUT_MSEC := 120000
 
-var _launcher: Node
+var _session: Node
 var _mesh_editor: RefCounted
 
 
-func _init(launcher: Node, mesh_editor: RefCounted) -> void:
-	_launcher = launcher
+func _init(session: Node, mesh_editor: RefCounted) -> void:
+	_session = session
 	_mesh_editor = mesh_editor
 
 
@@ -93,7 +94,7 @@ func _run(node: MeshInstance3D, blend: String, rename: bool) -> void:
 	# The node's own Blender file already holds its hierarchy; otherwise build one.
 	var glb_abs := ProjectSettings.globalize_path(_mesh_editor._glb_path(node))
 	var sidecar_abs := glb_abs + ".blend"
-	if _launcher.is_open(sidecar_abs):
+	if _session.is_open(sidecar_abs):
 		_alert("%s is open in Blender. Save and close it first." % node.name)
 		return
 	if FileAccess.file_exists(sidecar_abs):
@@ -103,12 +104,14 @@ func _run(node: MeshInstance3D, blend: String, rename: bool) -> void:
 		if _mesh_editor._export_glb(node, glb_abs) != OK:
 			_alert("Exporting %s to glTF failed." % node.name)
 			return
+		if not BlenderSetup.ensure():
+			return
 		var output := []
-		var code := OS.execute(_launcher._blender_path(), PackedStringArray([
+		var code := BlenderSetup.execute(PackedStringArray([
 			"-b", "--factory-startup",
-			"--python", ProjectSettings.globalize_path(_launcher.BRIDGE),
+			"--python", ProjectSettings.globalize_path(_session.BRIDGE),
 			"--", "--mode", "convert", "--target", glb_abs, "--blend", blend_abs,
-		]), output, true)
+		]), output)
 		if code != 0 or not FileAccess.file_exists(blend):
 			_alert("Blender could not create %s:\n\n%s" % [blend, "\n".join(output).right(1500)])
 			return
@@ -127,7 +130,7 @@ func _run(node: MeshInstance3D, blend: String, rename: bool) -> void:
 ## Waits for Godot to import the new file, then loads it.
 func _import(blend: String) -> PackedScene:
 	var fs := EditorInterface.get_resource_filesystem()
-	var tree := _launcher.get_tree()
+	var tree := _session.get_tree()
 	var start := Time.get_ticks_msec()
 	fs.scan()
 	while Time.get_ticks_msec() - start < IMPORT_TIMEOUT_MSEC:

@@ -13,13 +13,13 @@ const META_ID := "blendot_id"
 const META_EDIT_ID := "blendot_edit_id"
 const RETRY_LIMIT := 5
 
-var _launcher: Node
+var _session: Node
 ## glb abs path -> {"node": WeakRef, "retries": int}
-var _sessions := {}
+var _node_edits := {}
 
 
-func _init(launcher: Node) -> void:
-	_launcher = launcher
+func _init(session: Node) -> void:
+	_session = session
 
 
 static func register_settings() -> void:
@@ -47,15 +47,15 @@ func edit(node: MeshInstance3D) -> void:
 			push_error("Blendot: exporting %s to glTF failed (%s)." % [node.name, error_string(err)])
 			return
 
-	_sessions[glb_abs] = {"node": weakref(node), "retries": 0}
-	_launcher.launch(glb_abs, blend_abs, false, _on_glb_changed, "node")
+	_node_edits[glb_abs] = {"node": weakref(node), "retries": 0}
+	_session.launch(glb_abs, blend_abs, false, _on_glb_changed, "node")
 
 
 ## Per node, keyed by an ID stored on the node (saved with the scene), so a new
 ## node never picks up a deleted one's .blend just because it has the same name.
 func _glb_path(node: MeshInstance3D) -> String:
 	var id := _edit_id(node)
-	var dir: String = ProjectSettings.get_setting(_launcher.SETTING_SIDECAR_DIR, "res://.blendot")
+	var dir: String = ProjectSettings.get_setting(_session.SETTING_SIDECAR_DIR, "res://.blendot")
 	return dir.path_join("nodes").path_join(("%s_%s" % [node.name, id]).validate_filename() + ".glb")
 
 
@@ -125,10 +125,10 @@ static func _material_name(mat: Material) -> String:
 # --- import ----------------------------------------------------------------------
 
 func _on_glb_changed(glb_abs: String) -> void:
-	var session: Dictionary = _sessions.get(glb_abs, {})
-	if session.is_empty():
+	var entry: Dictionary = _node_edits.get(glb_abs, {})
+	if entry.is_empty():
 		return
-	var node := session.node.get_ref() as MeshInstance3D
+	var node := entry.node.get_ref() as MeshInstance3D
 	if node == null or not node.is_inside_tree():
 		push_warning("Blendot: the node for %s is gone; Blender changes not applied."
 			% glb_abs.get_file())
@@ -137,14 +137,14 @@ func _on_glb_changed(glb_abs: String) -> void:
 	var parsed := _parse_glb(glb_abs)
 	if parsed.is_empty():
 		# Blender may still be writing the file; try again shortly.
-		session.retries += 1
-		if session.retries <= RETRY_LIMIT:
-			_launcher.get_tree().create_timer(0.5).timeout.connect(
+		entry.retries += 1
+		if entry.retries <= RETRY_LIMIT:
+			_session.get_tree().create_timer(0.5).timeout.connect(
 				_on_glb_changed.bind(glb_abs))
 		else:
 			push_error("Blendot: could not read %s." % glb_abs)
 		return
-	session.retries = 0
+	entry.retries = 0
 	_apply(node, parsed, glb_abs)
 
 

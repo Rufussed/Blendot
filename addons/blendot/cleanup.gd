@@ -7,11 +7,11 @@ extends RefCounted
 const MeshNodeEditor := preload("res://addons/blendot/mesh_node_editor.gd")
 const SIDECAR_SUFFIXES := [".glb", ".glb.blend", ".glb.blend1", ".glb.blend.json", ".glb.blend.bak"]
 
-var _launcher: Node
+var _session: Node
 
 
-func _init(launcher: Node) -> void:
-	_launcher = launcher
+func _init(session: Node) -> void:
+	_session = session
 
 
 func run() -> void:
@@ -39,11 +39,11 @@ func run() -> void:
 
 
 func find_unused() -> Array[String]:
-	var sidecar_dir: String = ProjectSettings.get_setting(_launcher.SETTING_SIDECAR_DIR, "res://.blendot")
+	var sidecar_dir: String = ProjectSettings.get_setting(_session.SETTING_SIDECAR_DIR, "res://.blendot")
 	var mesh_dir: String = ProjectSettings.get_setting(MeshNodeEditor.SETTING_MESH_DIR, "res://blendot_meshes")
 	_load_project_text([sidecar_dir, mesh_dir])
 	var open_scenes := _open_scene_state()
-	var busy: Array = _launcher.open_blend_files().map(ProjectSettings.localize_path)
+	var busy: Array = _session.open_blend_files().map(ProjectSettings.localize_path)
 	var unused: Array[String] = []
 
 	# Node sidecars: <name>_<edit id>.glb (+ .blend ...), used while a scene

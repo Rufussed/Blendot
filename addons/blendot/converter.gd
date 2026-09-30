@@ -6,12 +6,13 @@ extends RefCounted
 ## Import settings that only mean something to the old importer.
 const FORMAT_PARAM_PREFIXES := ["fbx/", "gltf/"]
 const CONVERTIBLE := ["fbx", "glb", "gltf"]
+const BlenderSetup := preload("res://addons/blendot/blender_setup.gd")
 
-var _launcher: Node
+var _session: Node
 
 
-func _init(launcher: Node) -> void:
-	_launcher = launcher
+func _init(session: Node) -> void:
+	_session = session
 
 
 static func can_convert(res_path: String) -> bool:
@@ -24,7 +25,7 @@ func confirm_and_convert(res_path: String, open_after: bool) -> void:
 	if FileAccess.file_exists(blend):
 		_alert("%s already exists. Remove or rename it first." % blend.get_file())
 		return
-	var problem: String = _launcher._unsupported_reason(res_path)
+	var problem: String = _session._unsupported_reason(res_path)
 	if problem:
 		_alert(problem)
 		return
@@ -40,7 +41,7 @@ func confirm_and_convert(res_path: String, open_after: bool) -> void:
 	dialog.ok_button_text = "Convert"
 	dialog.confirmed.connect(func():
 		if convert_asset(res_path) and open_after:
-			_launcher.open_blend(blend))
+			_session.open_blend(blend))
 	dialog.visibility_changed.connect(func():
 		if not dialog.visible: dialog.queue_free())
 	EditorInterface.popup_dialog_centered(dialog)
@@ -57,19 +58,21 @@ func convert_asset(res_path: String) -> bool:
 	var blend_abs := ProjectSettings.globalize_path(blend)
 
 	# 1. The .blend: an up-to-date sidecar already holds the user's Blender work.
-	var sidecar: String = _launcher.sidecar_blend_path(res_path)
+	var sidecar: String = _session.sidecar_blend_path(res_path)
 	var sidecar_current: bool = FileAccess.file_exists(sidecar) \
-		and FileAccess.get_sha256(res_path) == _launcher._recorded_hash(sidecar)
+		and FileAccess.get_sha256(res_path) == _session._recorded_hash(sidecar)
 	if sidecar_current:
 		DirAccess.copy_absolute(ProjectSettings.globalize_path(sidecar), blend_abs)
 	else:
+		if not BlenderSetup.ensure():
+			return false
 		var output := []
-		var code := OS.execute(_launcher._blender_path(), PackedStringArray([
+		var code := BlenderSetup.execute(PackedStringArray([
 			"-b", "--factory-startup",
-			"--python", ProjectSettings.globalize_path(_launcher.BRIDGE),
+			"--python", ProjectSettings.globalize_path(_session.BRIDGE),
 			"--", "--mode", "convert",
 			"--target", ProjectSettings.globalize_path(res_path), "--blend", blend_abs,
-		]), output, true)
+		]), output)
 		if code != 0 or not FileAccess.file_exists(blend):
 			_alert("Blender could not convert %s:\n\n%s" % [res_path.get_file(),
 				"\n".join(output).right(1500)])

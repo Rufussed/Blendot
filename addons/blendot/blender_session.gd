@@ -3,8 +3,6 @@ extends Node
 ## Creates/opens the sidecar .blend for an asset, launches Blender, and
 ## rescans the filesystem when Blender writes the asset back.
 
-const SETTING_BLENDER := "blendot/blender_path"
-const SETTING_GODOT_BLENDER := "filesystem/import/blender/blender_path"
 const SETTING_SIDECAR_DIR := "blendot/sidecar_dir"
 const SETTING_ON_CHANGE := "blendot/on_external_change"
 const SETTING_MODE := "blendot/mode"
@@ -15,6 +13,8 @@ const ON_CHANGE_USE_NEW := 1
 const ON_CHANGE_KEEP_MINE := 2
 const BRIDGE := "res://addons/blendot/blender/blendot_bridge.py"
 
+const BlenderSetup := preload("res://addons/blendot/blender_setup.gd")
+
 ## abs path -> {"mtime": int, "on_change": Callable}, for files Blender writes.
 var _watched := {}
 ## blend abs path -> pid of the Blender this editor session launched for it.
@@ -23,13 +23,7 @@ var _timer: Timer
 
 
 static func register_settings() -> void:
-	var es := EditorInterface.get_editor_settings()
-	if not es.has_setting(SETTING_BLENDER):
-		es.set_setting(SETTING_BLENDER, "")
-	es.set_initial_value(SETTING_BLENDER, "", false)
-	es.add_property_info({"name": SETTING_BLENDER, "type": TYPE_STRING,
-		"hint": PROPERTY_HINT_GLOBAL_FILE})
-
+	BlenderSetup.migrate_old_setting()
 	_project_setting(SETTING_SIDECAR_DIR, "res://.blendot",
 		{"type": TYPE_STRING, "hint": PROPERTY_HINT_DIR})
 	_project_setting(SETTING_MODE, MODE_SIDECAR,
@@ -146,6 +140,8 @@ func launch(asset_abs: String, blend_abs: String, rebuild: bool,
 		watch(asset_abs, on_change)
 		_focus_existing(blend_abs)
 		return
+	if not BlenderSetup.ensure():
+		return
 	DirAccess.make_dir_recursive_absolute(blend_abs.get_base_dir())
 	_ensure_gdignore()
 	if rebuild and FileAccess.file_exists(blend_abs):
@@ -155,10 +151,9 @@ func launch(asset_abs: String, blend_abs: String, rebuild: bool,
 		"--python", ProjectSettings.globalize_path(BRIDGE),
 		"--", "--target", asset_abs, "--blend", blend_abs, "--mode", mode,
 	])
-	var pid := OS.create_process(_blender_path(), args)
+	var pid := BlenderSetup.spawn(args)
 	if pid <= 0:
-		push_error("Blendot: could not start Blender at '%s'. Set Editor Settings > %s."
-			% [_blender_path(), SETTING_BLENDER])
+		BlenderSetup.show_dialog("Blendot couldn't start Blender.")
 		return
 	print("Blendot: editing %s in Blender (sidecar %s)" % [asset_abs, blend_abs])
 	_running[blend_abs] = pid
@@ -194,11 +189,13 @@ func open_blend(res_path: String) -> void:
 	if is_open(blend_abs):
 		_focus_existing(blend_abs)
 		return
-	var pid := OS.create_process(_blender_path(), PackedStringArray([
+	if not BlenderSetup.ensure():
+		return
+	var pid := BlenderSetup.spawn(PackedStringArray([
 		"--python", ProjectSettings.globalize_path(BRIDGE),
 		"--", "--blend", blend_abs, "--mode", "plain"]))
 	if pid <= 0:
-		push_error("Blendot: could not start Blender at '%s'." % _blender_path())
+		BlenderSetup.show_dialog("Blendot couldn't start Blender.")
 		return
 	_running[blend_abs] = pid
 	watch(blend_abs, _rescan)
@@ -212,14 +209,6 @@ static func mode() -> int:
 func watch(path: String, on_change: Callable) -> void:
 	_watched[path] = {"mtime": FileAccess.get_modified_time(path), "on_change": on_change}
 	_timer.start()
-
-
-func _blender_path() -> String:
-	var es := EditorInterface.get_editor_settings()
-	for key in [SETTING_BLENDER, SETTING_GODOT_BLENDER]:
-		if es.has_setting(key) and str(es.get_setting(key)) != "":
-			return es.get_setting(key)
-	return "blender"
 
 
 func _ensure_gdignore() -> void:
