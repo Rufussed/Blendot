@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/logo.webp" alt="Blendot logo" width="220"></p>
+<img src="docs/logo.webp" alt="Blendot logo" width="220">
 
 # Blendot
 
