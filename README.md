@@ -10,6 +10,10 @@ Edit Godot assets in Blender with one click. Save in Blender, and the change sho
 
 Requires **Godot 4.4+** (developed on 4.7) and **Blender 4.2+** (developed on 5.2).
 
+| Right-click → **Edit in Blender** | Save in Blender: new objects come back as child nodes |
+|---|---|
+| ![Edit in Blender in the Scene tree menu](docs/screenshots/1-edit-in-blender.png) | ![A monkey added in Blender appears as a child node in Godot](docs/screenshots/2-round-trip.png) |
+
 ## Install
 
 1. Copy `addons/blendot/` into your project.
