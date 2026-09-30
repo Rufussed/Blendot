@@ -3,6 +3,7 @@ extends EditorContextMenuPlugin
 
 const SUPPORTED := ["fbx", "glb", "gltf", "obj", "blend"]
 const BlenderSession := preload("res://addons/blendot/blender_session.gd")
+const BlenderSetup := preload("res://addons/blendot/blender_setup.gd")
 
 var _session: Node
 var _converter: RefCounted
@@ -22,7 +23,7 @@ func _popup_menu(paths: PackedStringArray) -> void:
 		return
 	var theme := EditorInterface.get_editor_theme()
 	var convertible: bool = _converter.can_convert(path)
-	add_context_menu_item("Edit in Blender", _on_edit, theme.get_icon("Edit", "EditorIcons"))
+	add_context_menu_item("Edit in Blender", _on_edit, BlenderSetup.menu_icon())
 	# In convert mode "Edit in Blender" already converts, so no separate item.
 	if convertible and BlenderSession.mode() == BlenderSession.MODE_SIDECAR:
 		add_context_menu_item("Convert to .blend...", _on_convert,

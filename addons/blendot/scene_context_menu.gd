@@ -1,6 +1,8 @@
 @tool
 extends EditorContextMenuPlugin
 
+const BlenderSetup := preload("res://addons/blendot/blender_setup.gd")
+
 var _editor: RefCounted
 var _to_asset: RefCounted
 ## Opens a model file in Blender, as the FileSystem dock's "Edit in Blender" does.
@@ -19,12 +21,12 @@ func _init(mesh_node_editor: RefCounted, node_to_asset: RefCounted,
 func _popup_menu(_paths: PackedStringArray) -> void:
 	var theme := EditorInterface.get_editor_theme()
 	if _selected_model_instance() != "":
-		add_context_menu_item("Edit in Blender", _on_edit_instance, theme.get_icon("Edit", "EditorIcons"))
+		add_context_menu_item("Edit in Blender", _on_edit_instance, BlenderSetup.menu_icon())
 		return
 	var node := _selected_mesh_node()
 	if node == null or node.mesh == null:
 		return
-	add_context_menu_item("Edit in Blender", _on_edit, theme.get_icon("Edit", "EditorIcons"))
+	add_context_menu_item("Edit in Blender", _on_edit, BlenderSetup.menu_icon())
 	add_context_menu_item("Save as .blend Asset...", _on_save_asset,
 		theme.get_icon("PackedScene", "EditorIcons"))
 

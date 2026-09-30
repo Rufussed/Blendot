@@ -10,6 +10,21 @@ const FLATPAK_PERMISSION := "flatpak override --user --talk-name=org.freedesktop
 
 ## The path that last passed probe() this session, so each launch doesn't re-test.
 static var _verified := ""
+static var _menu_icon: Texture2D
+
+
+## The logo at menu-icon size (16 px times the editor scale). Loaded lazily, not
+## preloaded, so the plugin still compiles before Godot has imported the PNG.
+static func menu_icon() -> Texture2D:
+	if _menu_icon == null:
+		var tex: Texture2D = load("res://addons/blendot/icons/blendot_menu.png")
+		if tex == null:
+			return EditorInterface.get_editor_theme().get_icon("Edit", "EditorIcons")
+		var image := tex.get_image()
+		var size := int(16 * EditorInterface.get_editor_scale())
+		image.resize(size, size, Image.INTERPOLATE_LANCZOS)
+		_menu_icon = ImageTexture.create_from_image(image)
+	return _menu_icon
 
 
 static func in_flatpak() -> bool:
