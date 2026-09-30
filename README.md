@@ -20,6 +20,8 @@ Requires **Godot 4.4+** (developed on 4.7) and **Blender 4.2+** (developed on 5.
 2. Go to **Project → Project Settings → Plugins** and enable **Blendot**.
 3. Go to **Project → Tools → Blendot: Connect Blender…**, pick a detected Blender (or browse to one), and press **Use This Blender**. If Blender isn't connected when you first use Blendot, this dialog opens by itself.
 
+   <img src="docs/screenshots/3-connect-blender.png" alt="The Connect Blender dialog finding and testing Blender" width="460">
+
 Blendot uses Godot's own Blender Path (**Editor Settings → FileSystem → Import → Blender**), so if you've already set that up for `.blend` import, there's nothing to do. On macOS you can pick `Blender.app` directly.
 
 **Godot installed as a Flatpak (Linux):** Blendot starts Blender on the host, which Godot's sandbox blocks by default. Allow it once, then restart Godot:
