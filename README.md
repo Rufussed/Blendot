@@ -71,3 +71,7 @@ Right-click a `MeshInstance3D` and choose **Edit in Blender**.
 ## How it works
 
 Godot launches Blender with `addons/blendot/blender/blendot_bridge.py`. The script opens (or creates) the `.blend`, and for that Blender session only, a save handler exports to the Godot asset. The only Blendot data stored in a `.blend` is a small ID on each object (plus a marker on the main object), which lets node edits follow renames. Node edits travel as glTF, the one format both programs read and write natively.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
