@@ -2,3 +2,7 @@
 .blendot/
 __pycache__/
 addons/godot_live_mcp
+
+# logo/ keeps only the GIMP master; exports from it are copied where they're used.
+/logo/*
+!/logo/*.xcf

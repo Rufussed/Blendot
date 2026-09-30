@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.webp" alt="Blendot logo" width="220"></p>
+
 # Blendot
 
 Edit Godot assets in Blender with one click. Save in Blender, and the change shows up back in Godot, in the same place.
@@ -12,7 +14,17 @@ Requires **Godot 4.4+** (developed on 4.7) and **Blender 4.2+** (developed on 5.
 
 1. Copy `addons/blendot/` into your project.
 2. Go to **Project → Project Settings → Plugins** and enable **Blendot**.
-3. If `blender` isn't on your `PATH`, set **Editor Settings → Blendot → Blender Path**. Blendot also uses Godot's own **FileSystem → Import → Blender → Blender Path** if that's set.
+3. Go to **Project → Tools → Blendot: Connect Blender…**, pick a detected Blender (or browse to one), and press **Use This Blender**. If Blender isn't connected when you first use Blendot, this dialog opens by itself.
+
+Blendot uses Godot's own Blender Path (**Editor Settings → FileSystem → Import → Blender**), so if you've already set that up for `.blend` import, there's nothing to do. On macOS you can pick `Blender.app` directly.
+
+**Godot installed as a Flatpak (Linux):** Blendot starts Blender on the host, which Godot's sandbox blocks by default. Allow it once, then restart Godot:
+
+```bash
+flatpak override --user --talk-name=org.freedesktop.Flatpak org.godotengine.Godot
+```
+
+Blender itself can be a normal install or a Flatpak. For a Flatpak Blender, pick `org.blender.Blender` from the detected list. Godot's own `.blend` import still can't reach Blender from inside a Flatpak Godot, so use Sidecar mode there rather than Convert.
 
 ## Using it
 
@@ -44,6 +56,7 @@ Right-click a `MeshInstance3D` and choose **Edit in Blender**.
 
 ### Tools menu
 
+- **Project → Tools → Blendot: Connect Blender…** detects, tests and chooses the Blender to use.
 - **Project → Tools → Blendot: Settings…** opens the Blendot project settings.
 - **Project → Tools → Blendot: Clean Up Unused Blender Files…** lists `.blend` files and meshes that no scene uses any more, and moves them to the system trash.
 
@@ -51,7 +64,7 @@ Right-click a `MeshInstance3D` and choose **Edit in Blender**.
 
 | Setting | Where | Default |
 |---|---|---|
-| Blender Path | Editor Settings → Blendot | Godot's Blender path, else `blender` |
+| Blender Path (shared with Godot's `.blend` import) | Editor Settings → FileSystem → Import → Blender, or **Tools → Blendot: Connect Blender…** | `blender` on `PATH` |
 | Mode (Sidecar / Convert) | Project Settings → Blendot | Sidecar |
 | Sidecar Dir | Project Settings → Blendot | `res://.blendot` |
 | Mesh Dir (edited node meshes) | Project Settings → Blendot | `res://blendot_meshes` |
@@ -75,3 +88,7 @@ Godot launches Blender with `addons/blendot/blender/blendot_bridge.py`. The scri
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Developing Blendot
+
+Clone this repo and open it in Godot: it's a small test project with the addon enabled. Running it opens a launcher that links this clone's `addons/blendot/` into another project, so changes here show up there straight away (Linux and macOS; Windows needs Developer Mode for links). The launcher and `logo/` aren't part of the addon download.

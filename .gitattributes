@@ -6,3 +6,5 @@
 /docs           export-ignore
 /test_assets    export-ignore
 /HANDOVER.md    export-ignore
+/launcher       export-ignore
+/logo           export-ignore
